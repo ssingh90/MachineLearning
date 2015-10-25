@@ -1,0 +1,120 @@
+
+### Human Activity Recognition : Predicting Activity Quality using Machine Learning
+
+##### Executive Summary
+This project attempts to predict the manner in which participants performed a dumbell curl exercise using data from accelerometers. 
+A random forest was found to be the best model to predict this.
+
+##### Loading required libraries:
+```{r warning=FALSE}
+library(caret)
+library(rpart)
+library(randomForest)
+library(knitr)
+```
+
+Training and test data was downloaded to working directory.
+
+```{r}
+setwd("~/GitHub/MachineLearning")
+
+data1 <- read.csv("pml-training.csv")
+data2 <- read.csv("pml-testing.csv")
+
+```
+##### Cleaning the data:
+```{r eval=FALSE}
+head(data1)
+```
+Preprocessing data to get rid of zero variabilty variables:
+```{r}
+nearzero <- nearZeroVar(data1)
+data1 <- data1[,-nearzero]
+dim(data1)
+```
+  
+Getting rid of columns with NA values:
+```{r}
+missing = is.na(data1)
+col1 = which(colSums(missing) > 19000)
+data1 = data1[, -col1]
+dim(data1)
+```
+The first 7 variables can be omitted as they are not relevant (ex.  row index, username, timestamps)
+
+```{r}
+data1 = data1[, -c(1:7)]
+dim(data1)
+```
+
+###### Data Slicing
+Splitting the the training data into training and validation datasets in the ratio 70:30
+
+```{r}
+set.seed(22334)
+inTrain <- createDataPartition(y=data1$classe, p=0.7, list=FALSE)
+training <- data1[inTrain,]
+testing <- data1[-inTrain,]
+dim(training)
+```
+
+##### Model Building 
+Since this is a classification problem, we will use Decision Trees and Random Forest algorithms rather than Regression to build our prediction models. We perform cross-validation and also compare performance of the models we build to select the one that works best.
+
+##### Random Forests:
+Using 5-fold cross-validation to build our Random Forest model:
+```{r}
+set.seed(22334)
+controlRf <- trainControl(method="cv", 5)
+modelRf <- train(classe ~ ., data=training, method="rf", trControl=controlRf, ntree=250)
+modelRf
+
+```
+###### Performance of model on training data; In sample error
+```{r}
+predictionRf <- predict(modelRf, training)
+cmRf1<- confusionMatrix(predictionRf, training$classe)
+cmRf1
+```
+The accuracy of the model is 99.97% and the in-sample error is 0.03%
+
+###### Cross-Validation on testing data; Out of sample error
+```{r}
+predictionRf <- predict(modelRf, testing)
+cmRf2<- confusionMatrix(predictionRf, testing$classe)
+cmRf2
+```
+The accuracy of the model is 99.39% and the in-sample error is 0.61%
+
+##### Model Building: Decision Tree
+We build a model using Decision Trees and compare the performance of the model with the Random Forest model to select the best model.
+
+```{r}
+set.seed(22334)
+modDt <- rpart(classe ~ ., data=training, method="class")
+predictionsDt <- predict(modDt, testing, type = "class")
+cmDt<- confusionMatrix(predictionsDt, testing$classe)
+cmDt
+```
+The accuracy fo the Decision Tree model is 69.62%. This model is clearly inferior to the Random Forest model.
+
+##### Results
+We conclude that the Random Forest model has a very high accuracy and hence we use it as the final model to make predictions on the test data provided.
+
+###### Helper function for creating separate result files for upload
+```{r eval=FALSE}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+```
+
+###### Make predictions on test data, using Random Forest model:
+```{r eval=FALSE}
+data2.clean <- data2[,names(data1)[1:51]] 
+tpred <- as.character(predict(modelRf, data2.clean))
+pml_write_files(tpred)
+```
